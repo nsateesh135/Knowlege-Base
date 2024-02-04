@@ -1,0 +1,235 @@
+/* Semi-Structured Data */
+
+-- Struct == Dictionary / Objects
+select struct(42 as answer,'Hello World!' as greeting) as info; 
+--------------------------------------------------------------------
+-- Arrays == Lists 
+-- The elements within an array should be of the same data type 
+select
+  [1, 4, 832] as integers,
+  ['a', 'b', 'c', 'xyz', 'Hallo!'] as strings,
+  [true, true, false, true ] as booleans,
+  [
+    STRUCT(1 as int, false as bools), 
+    STRUCT(25, false), 
+    STRUCT(620, true) 
+  ] as structs1,
+  [
+    STRUCT( [5, 2, 9] as arr ), 
+    STRUCT( [7, 2] ), 
+    STRUCT( [15, 0, 94] ) 
+  ] as structs2;
+----------------------------------------------------------------------
+-- Semi Structured data can be used as pre-joined tables, this helps reduce storage cost
+-- Example: 
+--Before:
+WITH t1 AS (
+    SELECT 1 AS id, 'spaghetti napoli' AS meal
+  UNION ALL
+    SELECT 2, 'soljanka'
+  ),
+t2 AS (
+    SELECT 1 AS id, 'spaghetti' AS ingredient  
+  UNION ALL
+    SELECT 1, 'tomatoes'
+  UNION ALL
+    SELECT 2, 'pickles'
+  UNION ALL
+    SELECT 2, 'lecsó'
+  )
+  
+SELECT * FROM t1 LEFT JOIN t2 USING(id);
+--After: 
+
+select 
+'spaghetti napoli' AS meal,['spaghetti','tomatoes'] as ingredients
+union all 
+select 
+'soljanka' AS meal,['pickles','lecsó'] as ingredients;
+
+--------------------------------------------------------------------------------------
+--unnest()
+-- 2 ways: flattening the table, sub-query aggregated array 
+select 
+id,name
+from
+unnest([
+  struct(1 as id,'john' as name),
+  struct(2 ,'mike'),
+  struct(3,'steven')
+
+]);
+
+WITH t1 AS (
+    SELECT 'spaghetti napoli' AS meal, ['spaghetti', 'tomatoes'] AS ingredient
+  UNION ALL
+    SELECT 'soljanka', ['pickles', 'lecsó']
+  )
+  
+SELECT 
+  meal,
+  (SELECT COUNT(*) FROM UNNEST(ingredient)) AS numIngr,
+  (SELECT STRING_AGG(i, '; ' ORDER BY i) FROM UNNEST(ingredient) AS i) AS listIngr,
+  (SELECT i FROM UNNEST(ingredient) i ORDER BY LENGTH(i) DESC LIMIT 1) AS longestIngr
+FROM t1;
+
+WITH t1 AS (
+    SELECT 'spaghetti napoli' AS meal, ['spaghetti', 'tomatoes'] AS ingredient
+  UNION ALL
+    SELECT 'soljanka', ['pickles', 'lecsó']
+  )
+  
+SELECT 
+  meal,
+  ARRAY(
+    SELECT AS STRUCT 
+      i, 
+      substr(upper(i),1,3) as ui, 
+      length(i) as len 
+    FROM UNNEST(ingredient) i
+  ) myIngred
+FROM t1;
+
+SELECT 
+  event_name,
+  -- Create an array with selected columns only (literally)
+  array(
+    select as struct item_id, item_name, item_category, item_list_index, promotion_name 
+    from unnest(items) 
+    order by item_list_index
+  ) as items
+
+FROM `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_20210131` 
+WHERE
+  ARRAY_LENGTH(items)>1
+  AND event_name='view_item';
+SELECT 
+  event_name,
+  items
+FROM `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_20210131` 
+WHERE
+  -- Only show events with "Charcoal" in their product name
+  exists(select 1 from unnest(items) where item_name like '%Charcoal%');
+
+--------------------------------------------------------------------------------------------
+-- Flatten tables by using joins(cross-join) on unnested arrays 
+-- step1: Take array and convert it into table rows 
+-- step2: cross join then with the arrays as parent row 
+WITH t1 AS (
+    SELECT 'spaghetti napoli' AS meal, ['spaghetti', 'tomatoes'] AS ingredient
+  UNION ALL
+    SELECT 'soljanka', ['pickles', 'lecsó']
+  )
+  
+SELECT 
+  meal,
+  i
+FROM t1, UNNEST(ingredient) AS i;
+---------------------------------------------------------------------------------------------
+-- Advanced Queries 
+-- , t.items as itm: joins with main table and results in a table where items array which exists 
+-- FYI cross joins removes arrays with null values while joining 
+/* 
+WITH tableA AS (
+  SELECT ["T001", "T002", "T003"] AS T_id, [1, 5] AS L_id
+  UNION ALL
+  SELECT ["T008", "T009"] AS T_id, NULL AS L_id
+)
+SELECT * FROM tableA
+, UNNEST(L_id) AS value
+*/ 
+SELECT 
+  event_name,
+  itm.item_name,
+  -- Count Google items within the duplicated items array!
+  (select COUNT(1) from unnest(items) where item_name like '%Google%') anzahl_Google_items_im_elternevent
+-- Cross Join with the items array!
+FROM `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_20210131` t, t.items as itm
+WHERE
+  -- Only show items whose event-products have "Charcoal" in their product name
+  exists(select 1 from unnest(items) where item_name like '%Charcoal%');
+---------------------------------------------------------------------------------------------------
+
+-- Aggregating to arrays from flat tables 
+
+WITH authors AS (
+  SELECT 10 AS id, 'Hannah Arendt' as author UNION ALL
+  SELECT 11, 'Simone de Beauvoir'
+),
+  books AS (
+  SELECT 10 AS id, 'On Violence' as title UNION ALL
+  SELECT 10, 'The Human Condition' UNION ALL
+  SELECT 10, 'On Revolution' UNION ALL
+  SELECT 11, 'The Second Sex' UNION ALL
+  SELECT 11, 'America Day by Day'
+),
+  result AS (
+  SELECT
+    author,
+    ARRAY_AGG(title) as works
+  FROM authors LEFT JOIN books USING(id)
+  GROUP BY author
+)
+
+SELECT
+  author,
+  works,
+  ARRAY_LENGTH(works) as qtyTitles,
+  (SELECT SUM( LENGTH(title) ) FROM UNNEST(works) AS title) qtyCharacters
+FROM result;
+----------------------------------------------------------------------------
+-- Aggregating arrays with struct 
+WITH authors AS (
+  SELECT 10 AS id, 'Hannah Arendt' as author UNION ALL
+  SELECT 11, 'Simone de Beauvoir'
+),
+  books AS (
+  SELECT 10 AS id, 'On Violence' as title, 1970 as year UNION ALL
+  SELECT 10, 'The Human Condition', 1958 UNION ALL
+  SELECT 10, 'On Revolution', 1963 UNION ALL
+  SELECT 11, 'The Second Sex', 1949 UNION ALL
+  SELECT 11, 'America Day by Day', 1950
+)
+
+SELECT
+  author,
+  ARRAY_AGG(
+    STRUCT(title, year)
+    ) as works
+FROM authors LEFT JOIN books USING(id)
+GROUP BY author;
+------------------------------------------------------------------------------------
+-- extending arrays 
+WITH authors AS (
+  SELECT 10 AS id, 'Hannah Arendt' as author UNION ALL
+  SELECT 11, 'Simone de Beauvoir'
+),
+  books AS (
+  SELECT 10 AS id, 'On Violence' as title, 1970 as year UNION ALL
+  SELECT 10, 'The Human Condition', 1958 UNION ALL
+  SELECT 10, 'On Revolution', 1963 UNION ALL
+  SELECT 11, 'The Second Sex', 1949 UNION ALL
+  SELECT 11, 'America Day by Day', 1950
+),
+ result AS (
+  SELECT
+    author,
+    ARRAY_AGG(
+      STRUCT(title, year)
+      ) as works
+  FROM authors LEFT JOIN books USING(id)
+  GROUP BY author
+)
+
+SELECT 
+  author,
+  works,
+  ARRAY_LENGTH(works) AS qtyTitles,
+  (SELECT ROUND( AVG(year) ,1) FROM UNNEST(works)) AS avgYear,
+  -- normal and window functions in subqueries! fed back into an array as a struct: 
+  ARRAY(SELECT AS STRUCT 
+      UPPER(title) AS title, 
+      ROUND( year - AVG(year) OVER (), 2) AS diffAvgYear 
+    FROM UNNEST(works)) AS normWorks
+FROM result;
+---------------------------------------------------------------------------------------------------

@@ -1,0 +1,221 @@
+1. what is curl? 
+   a. Short hand for Client for URL's 
+   b. is a Unix command to transfer data from and to a server 
+   c. Commonly used to download data from Http sites and FTP servers 
+   d. man curl : For information on curl
+
+1.1 How to download a file from a server without changing the name of the file? 
+    a. 'o' is an optional flag used to save file with original name
+        curl -O https://websitename.com/datafilename.txt
+
+1.2 How to rename a file? 
+   a. include name after passing the -o flag 
+      curl -O renamedatafilename.txt https://websitename.com/datafilename.txt
+
+1.3 How to download multiple files using wildcards? 
+   curl -o https://websitename.com/datafilename*.txt
+   a. Using globbing parser 
+   curl -o https://websitename.com/datafilename[001-100].txt
+   b. Using globbing parser to moving in increments of 10
+   curl -o https://websitename.com/datafilename[001-100:10].txt
+
+1.4 How to redirect to HTTP Url when 300 errors occurs? 
+   a. add 'L' optional flag 
+   b. 'R' flag resumes a previous file transfer if it times out before completion
+      curl -L -O -R https://websitename.com/datafilename[001-100:10].txt
+
+1.5 Key gotchas:
+    a. All optional flags must come before the URL 
+    b. Order of the flags doesn't matter 
+
+2. What is Wget?
+  a. It is derived from world wide web + get 
+  b. Native to linux but is compatible for all opearting system 
+  c. Used to download HTTP(S), FTP and SMTP files
+  d. Better than curl to download multiple files recursively 
+  e. which Wget : To check if wget is installed on os (usually found in bin folder /users/local/bin/wget)
+  f. man Wget: For information on Wget
+  g. Once we execute wget make sure to take a peak at download logs
+
+2.1 How to download file from server using Wget? 
+   -b : flag to indicate go to background immediately after startup
+   -q : flag to turn off Wget output 
+   -c : flag to resume broken download(i.e continue getting a partially downloaded file)
+   wget -bqc https://websitename.com/datafilename.txt
+
+2.2 How to download multiple files using Wget? 
+   a. First save list of file locations in a text file like url_list.txt 
+   b. pass the i flag to download data from the url's in url_list.txt file
+   c. don't pass other optional flag after i place it before 
+      wget -i url_list.txt
+
+2.3 How to set download constraints for large files?
+    a. set upper download bandwidth limit (by default in bytes per second) with --limit
+    wget --limit-rate=200k -i url_list.txt
+
+2.4 How to set time gap between fetching files from server ? 
+   a. By default the wait time is set to 2 seconds
+   b. If you leave a space between = and 2.5 it wont work
+      wget --wait=2.5 -i url_list.txt
+
+3. Commad line commands 
+   a. unzips a zip file and removes a particular file
+   b. && helps execute multiple steps together 
+   unzip <example.zip> && rm <example1.zip> 
+
+4. csvkit 
+  a. is a suite of command line tools
+  b. is developed in Python by wireservice 
+  c. offers data processing and cleaning cpabilities on CSV files
+  d. has capabilities that rival Python, R  and SQL 
+
+4.1 How to install csvkit ? 
+   a. pip install csvkit 
+   b. pip install --upgrade csvkit 
+
+4.2 Where to find documentation for csvkit ? 
+    It is a web based document (https://csvkit.readthedocs.io/en/latest/tutorial.html)
+
+4.3 in2csv : How to covert files to csv?
+    in2csv --help or in2csv -h
+
+    a. First part of '>' prints first sheet in Excel to console and does not save
+    in2csv SpotifyData.xlsx > SpotifyData.csv
+    b. To print all sheet names in SpotifyData.xlsx
+    in2csv -n SpotifyData.xlsx
+    c. Convert only a particular sheet to csv
+    in2csv SpotifyData.xlsx --sheet "Sheet1" >SpotifyData.csv
+
+4.4 csvlook : How to preview data on the command line ? 
+     csvlook -h
+     csvlook SpotifyData.csv
+
+4.5 csvstat : How to get descriptive stats(mean,median,unique values) for all columns in a csv file?
+    csvstat -h
+    csvstat SpotifyData.csv
+
+4.5 csvcut : How to filter data by columns? 
+    csvcut -h 
+   a. "n" flag to display all columns in a file 
+    csvcut -n SpotifyData.csv
+   b. "c" flag is used to filter column values
+    csvcut -c 1 SpotifyData.csv
+    csvcut -c "track_id" SpotifyData.csv
+    csvcut -c 2,3 SpotifyData.csv
+    csvcut -c "track_id","time_in_sec" SpotifyData.csv
+
+4.6 csvgrep: How to filter data by rows?
+    csvgrep -h
+    a. "m" flag forces exact match 
+    b. "r" flag forces regexp match 
+    c. "f" flag forces file match 
+   d. You don't need to put the filter value in quotation for string/numeric
+    csvgrep -c 1 -m ejhdgjhgsxhshd12 SpotifyData.csv
+    cdvgrep -c "track_id" -m ejhdgjhgsxhshd12 SpotifyData.csv
+
+4.7 csvstack: How to stack multiple csv files?
+    a. Stack up rows from 2 different csv files
+    csvstack -h
+    csvstack Spotify_Rank6.csv Spotify_Rank7.csv > Spotify_AllRanks.csv
+    b. "g" : adds a column called group which indicates file from which row was extracted
+    c. "n" : helps change the name of group column to a custom name
+    d. "\" : helps to write code in multiple lines
+    csvstack -g "Rank6","Rank7" \
+    Spotify_Rank6.csv Spotify_Rank7.csv > Spotify_AllRanks.csv
+
+    csvstack -g "Rank6","Rank7" -n "source"\
+    Spotify_Rank6.csv Spotify_Rank7.csv > Spotify_AllRanks.csv
+
+4.8 How to chain commands ? 
+   a. ";" links commands together and runs sequentially(both commands are implemented)
+    csvlook SpotifyData.csv;csvstat SpotifyData.csv
+   b. "&&" links commands together but only runs 2nd command if 1 succeeds
+   csvlook SpotifyData.csv && csvstat SpotifyData.csv
+   c. ">" redirects the output from the first command to the location indicated as the 2nd
+   in2csv SpotifyData.xlxs > SpotifyData.csv
+
+   d. "|" uses output of the 1st command as input to 2nd
+   csvcut -c "track_id","time_in_sec" SpotifyData.csv | csvlook
+
+5. Pulling data from database 
+   a. executes a SQL query on large variety of databases like MS SQL, MYSQL, Oracle, PostgreSQL, Sqlite
+   b. outputs the result to a CSV file
+      sql2csv -h
+5.1 sql2csv : How to pull data from a chosen SQL engine? 
+    a. "postgres:///" when connecting to postgres and with no .db
+    b. "mysql:///" when connecting to mysql and with no.db
+    c. If we don't redirect query output to a file then the query results gets printed to the console
+    d. write the sql in one line with no line breaks
+    e. If we don't retarget output in a file then all values are displayed on the console
+     sql2csv --db "sqllite:///SpotifyDatabase.db" \
+             --query "select* from Spotify_Popularity" \
+             > Spotify_Popularity.csv     
+
+5.2 How to print detailed tracebacks and logs when errors occurs using a function? 
+     a. pass -v or --verbose
+
+6. csvsql: Manipulating data using SQL Syntax 
+   a. Applies SQL statements to one or more csv files
+   b. Creates an in memory db that temporarrily hosts the file being processed
+   c. Suitable for small to medium files only
+   d. csvsql -h
+
+6.1 How to use csvsql? 
+   csvsql --query "SELECT * FROM Spotify_MusicAttributes LIMIT 1" \
+    Spotify_MusicAttributes.csv | csvlook
+
+   csvsql --query "SELECT * FROM Spotify_MusicAttributes LIMIT 1" \
+    Spotify_MusicAttributes.csv > OneSongFile.csv
+   
+   a. Joining data from multiple csv files 
+   b. The files at the end should be in the same order as join in SQL statement
+   c. There can't be any line breaks in the SQL statement
+
+   csvsql --query "SELECT * FROM file_a INNER JOIN file_b.." file_a.csv file_b.csv
+
+6.2 How do we push data back to a database?
+   a. We can use csvsql for this operation
+   b. execute SQL statements directly on a database
+   c. supports both creating and inserting data 
+   d. insert command creates a table if the table doen't exist and then inserts database
+   csvsql --db "sqlite:///SpotifyDatabase.db"\
+          --insert Spotify_MusicAttributes.csv
+
+   e. no-inference disables type inference and converts values of all columns as text 
+      no-constraints directs to generate schema without length limits or null checks
+   csvsql --no-inference --no-constraints
+          --db "sqlite:///SpotifyDatabase.db"\
+          --insert Spotify_MusicAttributes.csv
+
+7. Python on the command line 
+ a. Python comes pre-installed on MaOS and linux
+ b. man Python for documentation 
+ c. python --version to know which version of Python
+ d. which python : Tells us if its a native python installation /usr/bin/python
+                    or using Anaconda /anaconda/bin/python
+ e. echo "print('hello world')" > helloworld.py : echo = print and store in a helloworld file
+    python helloworld.py : to execute Python file on the command line
+
+7.1 Working with pip 
+   a. pip -h 
+   b. pip --version : check if pip version is compatible with Python version
+   c. pip list : All available packages 
+   d. pip install skikit-learn ==0.19.2 specifying a particular package version
+   e. pip install --upgrade skikit-learn
+   f. pip install scikit-learn statsmodels 
+   g. pip install --upgrade scikit-learn statsmodels 
+   h. pip install -r requirements.txt(The file by convention is named requirements  we can name this anything)
+
+8. Data Job Automation with cron 
+  a. Scheduler runs jobs on pre-determined schedules
+  b. Commercial Schedulers : Airflow, Luigi, Rundeck
+  c. cron is :simple, free, customizable,purely command line, native to MacOS & linux
+  d. It is used to automate jobs like system maintenance, bash scripts,Python Jobs
+  e. crontab -l : list all available cron jobs(all cron jobs need to be stored in a file named crontab)
+     echo "* * * * * python create_model.py" |crontab
+f. The most frequent schedule for cron jobs is one minute 
+    * - minute(0-59)
+     * - hour(0-23)
+      * - day of month (1-31)
+       * - month(1-12)
+        * - day of week (0-6)

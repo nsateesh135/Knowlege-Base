@@ -1,0 +1,97 @@
+-- prep query to pull in all raw data
+with prep as (
+select
+    user_pseudo_id,
+    (select value.int_value from unnest(event_params) where key = 'ga_session_id') as session_id,
+    event_name,
+    event_timestamp,
+    (select value.string_value from unnest(event_params) where event_name = 'page_view' and key = 'page_location') as pageview_location
+from
+    `simoahava-com.analytics_206575074.events_20210701`),
+
+-- subquery to get all sessions with a length > 10 seconds
+session_length as (
+select
+ user_pseudo_id,
+ session_id,
+ datetime(timestamp_seconds(session_id),"Australia/Melbourne") as session_datetime,
+ (max(event_timestamp) - min(event_timestamp))/1000000 as session_length
+from
+    prep
+group by 1,2,3
+having session_length>=10
+    ),
+
+
+
+-- subquery to get all sessions with 2 or more (unique) page views
+multiple_pageviews as (
+select 
+user_pseudo_id,
+session_id,
+datetime(timestamp_seconds(session_id),"Australia/Melbourne") as session_datetime,
+pageview_location,
+row_number() over (partition by user_pseudo_id, session_id, pageview_location) as duplicate_page_views,
+count(pageview_location) over (partition by user_pseudo_id,session_id) as unique_pageviews
+from
+    prep
+where
+    pageview_location is not null
+group by 
+user_pseudo_id,
+session_id,
+pageview_location, 
+event_timestamp
+qualify duplicate_page_views = 1 and unique_pageviews>=2
+),
+
+
+-- subquery to get all sessions with a conversion event (in this example 'purchase')
+conversion_event as (
+select 
+user_pseudo_id,
+session_id,
+datetime(timestamp_seconds(session_id),"Australia/Melbourne") as session_datetime,
+from
+    prep
+where event_name = "purchase" ),
+
+
+-- subquery to combine and deduplicate all subqueries generated earlier
+dedup as (
+
+select 
+user_pseudo_id,
+session_id,
+session_datetime
+from session_length
+
+union distinct 
+select 
+user_pseudo_id,
+session_id,
+session_datetime
+from multiple_pageviews
+group by 
+user_pseudo_id,
+session_id,
+session_datetime
+
+union distinct 
+select 
+user_pseudo_id,
+session_id,
+session_datetime
+from conversion_event
+)
+
+-- main query to count unique engaged sessions by date in descending order
+select
+extract(date from session_datetime) as date,
+count(distinct concat(user_pseudo_id,session_id)) as engaged_sessions
+from
+    dedup
+group by
+    date
+order by
+    date desc
